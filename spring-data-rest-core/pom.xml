@@ -11,12 +11,12 @@
 	<parent>
 		<groupId>org.springframework.data</groupId>
 		<artifactId>spring-data-rest-parent</artifactId>
-		<version>2.1.0.BUILD-SNAPSHOT</version>
+		<version>2.1.0.ALPS-SNAPSHOT</version>
 		<relativePath>../pom.xml</relativePath>
 	</parent>
 	
 	<properties>
-		<spring.hateoas>0.10.0.BUILD-SNAPSHOT</spring.hateoas>
+		<spring.hateoas>0.10.0.ALPS-SNAPSHOT</spring.hateoas>
 		<springplugin>1.0.0.RELEASE</springplugin>
 		<evoinflector>1.0.1</evoinflector>
 	</properties>

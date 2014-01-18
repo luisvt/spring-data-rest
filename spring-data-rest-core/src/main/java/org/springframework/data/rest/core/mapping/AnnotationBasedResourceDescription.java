@@ -15,6 +15,7 @@
  */
 package org.springframework.data.rest.core.mapping;
 
+import org.springframework.core.annotation.AnnotationUtils;
 import org.springframework.data.rest.core.annotation.Description;
 import org.springframework.http.MediaType;
 import org.springframework.util.Assert;
@@ -26,7 +27,7 @@ import org.springframework.util.StringUtils;
  * 
  * @author Oliver Gierke
  */
-class AnnotationBasedResourceDescription extends ResolvableResourceDescriptionSupport {
+public class AnnotationBasedResourceDescription extends ResolvableResourceDescriptionSupport {
 
 	private final String message;
 	private final ResourceDescription fallback;
@@ -37,12 +38,20 @@ class AnnotationBasedResourceDescription extends ResolvableResourceDescriptionSu
 	 * @param description must not be {@literal null}.
 	 * @param fallback must not be {@literal null}.
 	 */
-	AnnotationBasedResourceDescription(Description description, ResourceDescription fallback) {
+	public AnnotationBasedResourceDescription(Description description, ResourceDescription fallback) {
 
 		Assert.notNull(description, "Description must not be null!");
 		Assert.notNull(fallback, "Fallback resource description must not be null!");
 
 		this.message = description.value();
+		this.fallback = fallback;
+	}
+
+	public AnnotationBasedResourceDescription(Class<?> type, ResourceDescription fallback) {
+
+		Description description = AnnotationUtils.findAnnotation(type, Description.class);
+
+		this.message = description == null ? null : description.value();
 		this.fallback = fallback;
 	}
 

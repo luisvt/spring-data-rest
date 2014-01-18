@@ -453,6 +453,12 @@ public abstract class AbstractWebIntegrationTests {
 		}
 	}
 
+	@Test
+	public void exposesDescriptionAsAlpsDocuments() throws Exception {
+
+		System.out.println(request("/alps", MediaType.valueOf("application/alps+json")).getContentAsString());
+	}
+
 	protected abstract Iterable<String> expectedRootLinkRels();
 
 	protected Map<String, String> getPayloadToPost() throws Exception {

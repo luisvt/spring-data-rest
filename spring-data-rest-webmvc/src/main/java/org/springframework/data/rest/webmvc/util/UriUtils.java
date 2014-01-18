@@ -21,6 +21,7 @@ import javax.servlet.http.HttpServletRequest;
 
 import org.springframework.core.MethodParameter;
 import org.springframework.hateoas.UriTemplate;
+import org.springframework.hateoas.core.AnnotationMappingDiscoverer;
 import org.springframework.util.Assert;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.context.request.NativeWebRequest;
@@ -34,6 +35,8 @@ import org.springframework.web.util.UrlPathHelper;
 public abstract class UriUtils {
 
 	private static final UrlPathHelper URL_PATH_HELPER = new UrlPathHelper();
+	private static final AnnotationMappingDiscoverer MAPPING_DISCOVERER = new AnnotationMappingDiscoverer(
+			RequestMapping.class);
 
 	private UriUtils() {}
 
@@ -52,16 +55,13 @@ public abstract class UriUtils {
 		Assert.notNull(request, "Request must not be null!");
 
 		String lookupPath = getCleanLookupPath(request);
-		RequestMapping annotation = parameter.getMethodAnnotation(RequestMapping.class);
+		String mapping = MAPPING_DISCOVERER.getMapping(parameter.getMethod());
 
-		for (String mapping : annotation.value()) {
+		Map<String, String> variables = new org.springframework.web.util.UriTemplate(mapping).match(lookupPath);
+		String value = variables.get(variable);
 
-			Map<String, String> variables = new org.springframework.web.util.UriTemplate(mapping).match(lookupPath);
-			String value = variables.get(variable);
-
-			if (value != null) {
-				return value;
-			}
+		if (value != null) {
+			return value;
 		}
 
 		return null;

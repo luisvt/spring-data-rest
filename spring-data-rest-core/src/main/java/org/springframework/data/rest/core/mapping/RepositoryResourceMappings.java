@@ -210,7 +210,7 @@ public class RepositoryResourceMappings implements ResourceMappings {
 	 * (non-Javadoc)
 	 * @see org.springframework.data.rest.core.mapping.ResourceMetadataProvider#getMappingFor(org.springframework.data.mapping.PersistentProperty)
 	 */
-	ResourceMapping getMappingFor(PersistentProperty<?> property) {
+	public ResourceMapping getMappingFor(PersistentProperty<?> property) {
 
 		ResourceMapping propertyMapping = propertyCache.get(property);
 

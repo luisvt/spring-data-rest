@@ -18,6 +18,8 @@ package org.springframework.data.rest.webmvc.config;
 import static org.springframework.util.ClassUtils.*;
 import static org.springframework.util.StringUtils.*;
 
+import javax.servlet.http.HttpServletRequest;
+
 import org.springframework.core.MethodParameter;
 import org.springframework.data.repository.core.RepositoryInformation;
 import org.springframework.data.repository.support.Repositories;
@@ -25,10 +27,12 @@ import org.springframework.data.rest.core.mapping.ResourceMappings;
 import org.springframework.data.rest.core.mapping.ResourceMetadata;
 import org.springframework.data.rest.webmvc.util.UriUtils;
 import org.springframework.util.Assert;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.support.WebDataBinderFactory;
 import org.springframework.web.context.request.NativeWebRequest;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.method.support.ModelAndViewContainer;
+import org.springframework.web.util.UrlPathHelper;
 
 /**
  * {@link HandlerMethodArgumentResolver} to create {@link ResourceMetadata} instances.

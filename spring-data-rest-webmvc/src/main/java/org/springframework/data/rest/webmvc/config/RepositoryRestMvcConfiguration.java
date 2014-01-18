@@ -65,6 +65,9 @@ import org.springframework.data.rest.webmvc.RepositoryRestController;
 import org.springframework.data.rest.webmvc.RepositoryRestHandlerAdapter;
 import org.springframework.data.rest.webmvc.RepositoryRestHandlerMapping;
 import org.springframework.data.rest.webmvc.ServerHttpRequestMethodArgumentResolver;
+import org.springframework.data.rest.webmvc.alps.AlpsController;
+import org.springframework.data.rest.webmvc.alps.AlpsJsonHttpMessageConverter;
+import org.springframework.data.rest.webmvc.alps.RootResourceInformationToAlpsDescriptorConverter;
 import org.springframework.data.rest.webmvc.convert.StringToDistanceConverter;
 import org.springframework.data.rest.webmvc.convert.StringToPointConverter;
 import org.springframework.data.rest.webmvc.convert.UriListHttpMessageConverter;
@@ -463,6 +466,11 @@ public class RepositoryRestMvcConfiguration extends HateoasAwareSpringDataWebCon
 	}
 
 	@Bean
+	public RequestMappingHandlerMapping fallbackMapping() {
+		return new RequestMappingHandlerMapping();
+	}
+
+	@Bean
 	public ResourceMappings resourceMappings() {
 
 		Repositories repositories = repositories();
@@ -511,6 +519,8 @@ public class RepositoryRestMvcConfiguration extends HateoasAwareSpringDataWebCon
 
 		List<HttpMessageConverter<?>> messageConverters = new ArrayList<HttpMessageConverter<?>>();
 
+		messageConverters.add(new AlpsJsonHttpMessageConverter(alpsConverter()));
+
 		if (config().getDefaultMediaType().equals(MediaTypes.HAL_JSON)) {
 			messageConverters.add(halJacksonHttpMessageConverter());
 			messageConverters.add(jacksonHttpMessageConverter());
@@ -518,9 +528,21 @@ public class RepositoryRestMvcConfiguration extends HateoasAwareSpringDataWebCon
 			messageConverters.add(jacksonHttpMessageConverter());
 			messageConverters.add(halJacksonHttpMessageConverter());
 		}
+
 		messageConverters.add(uriListHttpMessageConverter());
 
 		return messageConverters;
+	}
+
+	@Bean
+	public AlpsController alpsController() {
+		return new AlpsController(repositories(), alpsConverter(), resourceMappings());
+	}
+
+	@Bean
+	public RootResourceInformationToAlpsDescriptorConverter alpsConverter() {
+		return new RootResourceInformationToAlpsDescriptorConverter(resourceMappings(), repositories(),
+				persistentEntities(), entityLinks(), resourceDescriptionMessageSourceAccessor(), config());
 	}
 
 	/* 

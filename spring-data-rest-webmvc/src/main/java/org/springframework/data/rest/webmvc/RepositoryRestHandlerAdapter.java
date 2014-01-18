@@ -63,6 +63,7 @@ public class RepositoryRestHandlerAdapter extends ResourceProcessorInvokingHandl
 
 		Class<?> controllerType = handlerMethod.getBeanType();
 
-		return AnnotationUtils.findAnnotation(controllerType, RepositoryRestController.class) != null;
+		return AnnotationUtils.findAnnotation(controllerType, RepositoryRestController.class) != null
+				|| super.supportsInternal(handlerMethod);
 	}
 }
