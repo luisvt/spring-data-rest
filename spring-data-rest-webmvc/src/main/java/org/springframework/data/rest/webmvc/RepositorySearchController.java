@@ -147,7 +147,7 @@ class RepositorySearchController extends AbstractRepositoryRestController {
 	 * @return
 	 */
 	@ResponseBody
-	@RequestMapping(value = BASE_MAPPING + "/{method}", method = RequestMethod.GET, //
+	@RequestMapping(value = BASE_MAPPING + "/{search}", method = RequestMethod.GET, //
 			produces = { "application/x-spring-data-compact+json" })
 	public ResourceSupport executeSearchCompact(RootResourceInformation resourceInformation, WebRequest request,
 			@PathVariable String repository, @PathVariable String search, Pageable pageable,
@@ -174,6 +174,20 @@ class RepositorySearchController extends AbstractRepositoryRestController {
 		}
 
 		return new Resource<Object>(EMPTY_RESOURCE_LIST, links);
+	}
+
+	/**
+	 * Handles a {@code HEAD} request for individual searches.
+	 * 
+	 * @param information
+	 * @param search
+	 * @return
+	 */
+	@RequestMapping(value = BASE_MAPPING + "/{search}", method = RequestMethod.HEAD)
+	public ResponseEntity<Object> headForSearch(RootResourceInformation information, @PathVariable String search) {
+
+		checkExecutability(information, search);
+		return new ResponseEntity<Object>(HttpStatus.NO_CONTENT);
 	}
 
 	/**
