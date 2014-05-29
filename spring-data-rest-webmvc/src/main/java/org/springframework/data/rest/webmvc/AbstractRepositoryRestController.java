@@ -57,7 +57,7 @@ import org.springframework.web.bind.annotation.ResponseBody;
  * @author Oliver Gierke
  */
 @SuppressWarnings({ "rawtypes" })
-class AbstractRepositoryRestController implements MessageSourceAware {
+public class AbstractRepositoryRestController implements MessageSourceAware {
 
 	private static final Logger LOG = LoggerFactory.getLogger(AbstractRepositoryRestController.class);
 

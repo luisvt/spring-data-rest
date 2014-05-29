@@ -110,550 +110,581 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.Module;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 
 /**
- * Main application configuration for Spring Data REST. To customize how the exporter works, subclass this and override
- * any of the {@literal configure*} methods.
+ * Main application configuration for Spring Data REST. To customize how the
+ * exporter works, subclass this and override any of the {@literal configure*}
+ * methods.
  * <p/>
- * Any XML files located in the classpath under the {@literal META-INF/spring-data-rest/} path will be automatically
- * found and loaded into this {@link org.springframework.context.ApplicationContext}.
- * 
+ * Any XML files located in the classpath under the
+ * {@literal META-INF/spring-data-rest/} path will be automatically found and
+ * loaded into this {@link org.springframework.context.ApplicationContext}.
+ *
  * @author Jon Brisbin
  * @author Oliver Gierke
  */
 @Configuration
 @EnableHypermediaSupport(type = HypermediaType.HAL)
 @ComponentScan(basePackageClasses = RepositoryRestController.class,
-		includeFilters = @Filter(RepositoryRestController.class), useDefaultFilters = false)
+        includeFilters = @Filter(RepositoryRestController.class), useDefaultFilters = false)
 @ImportResource("classpath*:META-INF/spring-data-rest/**/*.xml")
 @Import(SpringDataJacksonConfiguration.class)
 public class RepositoryRestMvcConfiguration extends HateoasAwareSpringDataWebConfiguration {
 
-	private static final boolean IS_JAVAX_VALIDATION_AVAILABLE = ClassUtils.isPresent(
-			"javax.validation.ConstraintViolationException", RepositoryRestMvcConfiguration.class.getClassLoader());
-	private static final boolean IS_JPA_AVAILABLE = ClassUtils.isPresent("javax.persistence.EntityManager",
-			RepositoryRestMvcConfiguration.class.getClassLoader());
+    protected final Log logger = LogFactory.getLog(getClass());
 
-	@Autowired ListableBeanFactory beanFactory;
+    private static final boolean IS_JAVAX_VALIDATION_AVAILABLE = ClassUtils.isPresent(
+            "javax.validation.ConstraintViolationException", RepositoryRestMvcConfiguration.class.getClassLoader());
+    private static final boolean IS_JPA_AVAILABLE = ClassUtils.isPresent("javax.persistence.EntityManager",
+            RepositoryRestMvcConfiguration.class.getClassLoader());
 
-	@Autowired(required = false) List<ResourceProcessor<?>> resourceProcessors = Collections.emptyList();
-	@Autowired(required = false) List<BackendIdConverter> idConverters = Collections.emptyList();
+    @Autowired
+    ListableBeanFactory beanFactory;
 
-	@Autowired(required = false) RelProvider relProvider;
-	@Autowired(required = false) CurieProvider curieProvider;
+    @Autowired(required = false)
+    List<ResourceProcessor<?>> resourceProcessors = Collections.emptyList();
+    @Autowired(required = false)
+    List<BackendIdConverter> idConverters = Collections.emptyList();
 
-	@Bean
-	public Repositories repositories() {
-		return new Repositories(beanFactory);
-	}
+    @Autowired(required = false)
+    RelProvider relProvider;
+    @Autowired(required = false)
+    CurieProvider curieProvider;
 
-	@Bean
-	public RepositoryRelProvider repositoryRelProvider(ObjectFactory<ResourceMappings> resourceMappings) {
-		return new RepositoryRelProvider(resourceMappings);
-	}
+    @Bean
+    public Repositories repositories() {
+        return new Repositories(beanFactory);
+    }
 
-	@Bean
-	public PersistentEntities persistentEntities() {
+    @Bean
+    public RepositoryRelProvider repositoryRelProvider(ObjectFactory<ResourceMappings> resourceMappings) {
+        return new RepositoryRelProvider(resourceMappings);
+    }
 
-		List<MappingContext<?, ?>> arrayList = new ArrayList<MappingContext<?, ?>>();
+    @Bean
+    public PersistentEntities persistentEntities() {
 
-		for (MappingContext<?, ?> context : BeanFactoryUtils.beansOfTypeIncludingAncestors(beanFactory,
-				MappingContext.class).values()) {
-			arrayList.add(context);
-		}
+        List<MappingContext<?, ?>> arrayList = new ArrayList<MappingContext<?, ?>>();
 
-		return new PersistentEntities(arrayList);
-	}
+        for (MappingContext<?, ?> context : BeanFactoryUtils.beansOfTypeIncludingAncestors(beanFactory,
+                MappingContext.class).values()) {
+            arrayList.add(context);
+        }
 
-	@Bean
-	@Qualifier
-	public DefaultFormattingConversionService defaultConversionService() {
+        return new PersistentEntities(arrayList);
+    }
 
-		DefaultFormattingConversionService conversionService = new DefaultFormattingConversionService();
-		conversionService.addConverter(UUIDConverter.INSTANCE);
-		configureConversionService(conversionService);
+    @Bean
+    @Qualifier
+    public DefaultFormattingConversionService defaultConversionService() {
 
-		if (!conversionService.canConvert(String.class, Point.class)) {
-			conversionService.addConverter(StringToPointConverter.INSTANCE);
-		}
+        DefaultFormattingConversionService conversionService = new DefaultFormattingConversionService();
+        conversionService.addConverter(UUIDConverter.INSTANCE);
+        configureConversionService(conversionService);
 
-		if (!conversionService.canConvert(String.class, Distance.class)) {
-			conversionService.addConverter(StringToDistanceConverter.INSTANCE);
-		}
+        if (!conversionService.canConvert(String.class, Point.class)) {
+            conversionService.addConverter(StringToPointConverter.INSTANCE);
+        }
 
-		return conversionService;
-	}
+        if (!conversionService.canConvert(String.class, Distance.class)) {
+            conversionService.addConverter(StringToDistanceConverter.INSTANCE);
+        }
 
-	@Bean
-	public DomainClassConverter<?> domainClassConverter() {
-		return new DomainClassConverter<DefaultFormattingConversionService>(defaultConversionService());
-	}
+        return conversionService;
+    }
 
-	@Bean
-	public UriToEntityConverter uriToEntityConverter() {
-		return new UriToEntityConverter(persistentEntities(), domainClassConverter());
-	}
+    @Bean
+    public DomainClassConverter<?> domainClassConverter() {
+        return new DomainClassConverter<DefaultFormattingConversionService>(defaultConversionService());
+    }
 
-	/**
-	 * {@link org.springframework.context.ApplicationListener} implementation for invoking
-	 * {@link org.springframework.validation.Validator} instances assigned to specific domain types.
-	 */
-	@Bean
-	public ValidatingRepositoryEventListener validatingRepositoryEventListener(ObjectFactory<Repositories> repositories) {
-		ValidatingRepositoryEventListener listener = new ValidatingRepositoryEventListener(repositories);
-		configureValidatingRepositoryEventListener(listener);
-		return listener;
-	}
+    @Bean
+    public UriToEntityConverter uriToEntityConverter() {
+        return new UriToEntityConverter(persistentEntities(), domainClassConverter());
+    }
 
-	@Bean
-	@Lazy
-	public ValidationExceptionHandler validationExceptionHandler() {
-		if (IS_JAVAX_VALIDATION_AVAILABLE) {
-			return new ValidationExceptionHandler();
-		} else {
-			return null;
-		}
-	}
+    /**
+     * {@link org.springframework.context.ApplicationListener} implementation
+     * for invoking {@link org.springframework.validation.Validator} instances
+     * assigned to specific domain types.
+     */
+    @Bean
+    public ValidatingRepositoryEventListener validatingRepositoryEventListener(ObjectFactory<Repositories> repositories) {
+        ValidatingRepositoryEventListener listener = new ValidatingRepositoryEventListener(repositories);
+        configureValidatingRepositoryEventListener(listener);
+        return listener;
+    }
 
-	@Bean
-	public JpaHelper jpaHelper() {
-		if (IS_JPA_AVAILABLE) {
-			return new JpaHelper();
-		} else {
-			return null;
-		}
-	}
+    @Bean
+    @Lazy
+    public ValidationExceptionHandler validationExceptionHandler() {
+        if (IS_JAVAX_VALIDATION_AVAILABLE) {
+            return new ValidationExceptionHandler();
+        } else {
+            return null;
+        }
+    }
 
-	/**
-	 * Main configuration for the REST exporter.
-	 */
-	@Bean
-	public RepositoryRestConfiguration config() {
+    @Bean
+    public JpaHelper jpaHelper() {
+        if (IS_JPA_AVAILABLE) {
+            return new JpaHelper();
+        } else {
+            return null;
+        }
+    }
 
-		ProjectionDefinitionConfiguration configuration = new ProjectionDefinitionConfiguration();
+    /**
+     * Main configuration for the REST exporter.
+     */
+    @Bean
+    public RepositoryRestConfiguration config() {
 
-		for (Class<?> projection : getProjections()) {
-			configuration.addProjection(projection);
-		}
+        ProjectionDefinitionConfiguration configuration = new ProjectionDefinitionConfiguration();
 
-		RepositoryRestConfiguration config = new RepositoryRestConfiguration(configuration);
-		configureRepositoryRestConfiguration(config);
-		return config;
-	}
+        for (Class<?> projection : getProjections()) {
+            configuration.addProjection(projection);
+        }
 
-	@Bean
-	public BaseUri baseUri() {
-		return new BaseUri(config().getBaseUri());
-	}
+        RepositoryRestConfiguration config = new RepositoryRestConfiguration(configuration);
+        configureRepositoryRestConfiguration(config);
+        return config;
+    }
 
-	/**
-	 * {@link org.springframework.beans.factory.config.BeanPostProcessor} to turn beans annotated as
-	 * {@link org.springframework.data.rest.repository.annotation.RepositoryEventHandler}s.
-	 * 
-	 * @return
-	 */
-	@Bean
-	public AnnotatedHandlerBeanPostProcessor annotatedHandlerBeanPostProcessor() {
-		return new AnnotatedHandlerBeanPostProcessor();
-	}
+    @Bean
+    public BaseUri baseUri() {
+        return new BaseUri(config().getBaseUri());
+    }
 
-	/**
-	 * For merging incoming objects materialized from JSON with existing domain objects loaded from the repository.
-	 * 
-	 * @return
-	 * @throws Exception
-	 */
-	@Bean
-	public DomainObjectMerger domainObjectMerger() throws Exception {
-		return new DomainObjectMerger(repositories(), defaultConversionService());
-	}
+    /**
+     * {@link org.springframework.beans.factory.config.BeanPostProcessor} to
+     * turn beans annotated as
+     * {@link org.springframework.data.rest.repository.annotation.RepositoryEventHandler}s.
+     *
+     * @return
+     */
+    @Bean
+    public AnnotatedHandlerBeanPostProcessor annotatedHandlerBeanPostProcessor() {
+        return new AnnotatedHandlerBeanPostProcessor();
+    }
 
-	/**
-	 * Turns an {@link javax.servlet.http.HttpServletRequest} into a
-	 * {@link org.springframework.http.server.ServerHttpRequest}.
-	 * 
-	 * @return
-	 */
-	@Bean
-	public ServerHttpRequestMethodArgumentResolver serverHttpRequestMethodArgumentResolver() {
-		return new ServerHttpRequestMethodArgumentResolver();
-	}
+    /**
+     * For merging incoming objects materialized from JSON with existing domain
+     * objects loaded from the repository.
+     *
+     * @return
+     * @throws Exception
+     */
+    @Bean
+    public DomainObjectMerger domainObjectMerger() throws Exception {
+        return new DomainObjectMerger(repositories(), defaultConversionService());
+    }
 
-	/**
-	 * A convenience resolver that pulls together all the information needed to service a request.
-	 * 
-	 * @return
-	 */
-	@Bean
-	public RootResourceInformationHandlerMethodArgumentResolver repoRequestArgumentResolver() {
-		return new RootResourceInformationHandlerMethodArgumentResolver(repositories(), repositoryInvokerFactory(),
-				resourceMetadataHandlerMethodArgumentResolver());
-	}
+    /**
+     * Turns an {@link javax.servlet.http.HttpServletRequest} into a
+     * {@link org.springframework.http.server.ServerHttpRequest}.
+     *
+     * @return
+     */
+    @Bean
+    public ServerHttpRequestMethodArgumentResolver serverHttpRequestMethodArgumentResolver() {
+        return new ServerHttpRequestMethodArgumentResolver();
+    }
 
-	@Bean
-	public ResourceMetadataHandlerMethodArgumentResolver resourceMetadataHandlerMethodArgumentResolver() {
-		return new ResourceMetadataHandlerMethodArgumentResolver(repositories(), resourceMappings(), baseUri());
-	}
+    /**
+     * A convenience resolver that pulls together all the information needed to
+     * service a request.
+     *
+     * @return
+     */
+    @Bean
+    public RootResourceInformationHandlerMethodArgumentResolver repoRequestArgumentResolver() {
+        return new RootResourceInformationHandlerMethodArgumentResolver(repositories(), repositoryInvokerFactory(),
+                resourceMetadataHandlerMethodArgumentResolver());
+    }
 
-	@Bean
-	public BackendIdHandlerMethodArgumentResolver backendIdHandlerMethodArgumentResolver() {
-		return new BackendIdHandlerMethodArgumentResolver(backendIdConverterRegistry(),
-				resourceMetadataHandlerMethodArgumentResolver(), baseUri());
-	}
+    @Bean
+    public ResourceMetadataHandlerMethodArgumentResolver resourceMetadataHandlerMethodArgumentResolver() {
+        return new ResourceMetadataHandlerMethodArgumentResolver(repositories(), resourceMappings(), baseUri());
+    }
 
-	/**
-	 * A special {@link org.springframework.hateoas.EntityLinks} implementation that takes repository and current
-	 * configuration into account when generating links.
-	 * 
-	 * @return
-	 * @throws Exception
-	 */
-	@Bean
-	public EntityLinks entityLinks() {
-		return new RepositoryEntityLinks(repositories(), resourceMappings(), config(), pageableResolver(),
-				backendIdConverterRegistry());
-	}
+    @Bean
+    public BackendIdHandlerMethodArgumentResolver backendIdHandlerMethodArgumentResolver() {
+        return new BackendIdHandlerMethodArgumentResolver(backendIdConverterRegistry(),
+                resourceMetadataHandlerMethodArgumentResolver(), baseUri());
+    }
 
-	/**
-	 * Reads incoming JSON into an entity.
-	 * 
-	 * @return
-	 */
-	@Bean
-	public PersistentEntityResourceHandlerMethodArgumentResolver persistentEntityArgumentResolver() {
+    /**
+     * A special {@link org.springframework.hateoas.EntityLinks} implementation
+     * that takes repository and current configuration into account when
+     * generating links.
+     *
+     * @return
+     * @throws Exception
+     */
+    @Bean
+    public EntityLinks entityLinks() {
+        return new RepositoryEntityLinks(repositories(), resourceMappings(), config(), pageableResolver(),
+                backendIdConverterRegistry());
+    }
 
-		List<HttpMessageConverter<?>> messageConverters = defaultMessageConverters();
-		configureHttpMessageConverters(messageConverters);
+    /**
+     * Reads incoming JSON into an entity.
+     *
+     * @return
+     */
+    @Bean
+    public PersistentEntityResourceHandlerMethodArgumentResolver persistentEntityArgumentResolver() {
 
-		return new PersistentEntityResourceHandlerMethodArgumentResolver(messageConverters, repoRequestArgumentResolver());
-	}
+        List<HttpMessageConverter<?>> messageConverters = defaultMessageConverters();
+        configureHttpMessageConverters(messageConverters);
 
-	/**
-	 * Turns a domain class into a {@link org.springframework.data.rest.webmvc.json.JsonSchema}.
-	 * 
-	 * @return
-	 */
-	@Bean
-	public PersistentEntityToJsonSchemaConverter jsonSchemaConverter() {
-		return new PersistentEntityToJsonSchemaConverter(persistentEntities(), resourceMappings(),
-				resourceDescriptionMessageSourceAccessor(), entityLinks());
-	}
+        return new PersistentEntityResourceHandlerMethodArgumentResolver(messageConverters, repoRequestArgumentResolver());
+    }
 
-	/**
-	 * The {@link MessageSourceAccessor} to provide messages for {@link ResourceDescription}s being rendered.
-	 * 
-	 * @return
-	 */
-	@Bean
-	public MessageSourceAccessor resourceDescriptionMessageSourceAccessor() {
+    /**
+     * Turns a domain class into a
+     * {@link org.springframework.data.rest.webmvc.json.JsonSchema}.
+     *
+     * @return
+     */
+    @Bean
+    public PersistentEntityToJsonSchemaConverter jsonSchemaConverter() {
+        return new PersistentEntityToJsonSchemaConverter(persistentEntities(), resourceMappings(),
+                resourceDescriptionMessageSourceAccessor(), entityLinks());
+    }
 
-		ReloadableResourceBundleMessageSource messageSource = new ReloadableResourceBundleMessageSource();
-		messageSource.setBasename("classpath:rest-messages");
-		messageSource.setUseCodeAsDefaultMessage(true);
+    /**
+     * The {@link MessageSourceAccessor} to provide messages for
+     * {@link ResourceDescription}s being rendered.
+     *
+     * @return
+     */
+    @Bean
+    public MessageSourceAccessor resourceDescriptionMessageSourceAccessor() {
 
-		return new MessageSourceAccessor(messageSource);
-	}
+        ReloadableResourceBundleMessageSource messageSource = new ReloadableResourceBundleMessageSource();
+        messageSource.setBasename("classpath:rest-messages");
+        messageSource.setUseCodeAsDefaultMessage(true);
 
-	/**
-	 * The Jackson {@link ObjectMapper} used internally.
-	 * 
-	 * @return
-	 */
-	@Bean
-	public ObjectMapper objectMapper() {
-		return basicObjectMapper();
-	}
+        return new MessageSourceAccessor(messageSource);
+    }
 
-	/**
-	 * The {@link HttpMessageConverter} used by Spring MVC to read and write JSON data.
-	 * 
-	 * @return
-	 */
-	@Bean
-	public MappingJackson2HttpMessageConverter jacksonHttpMessageConverter() {
+    /**
+     * The Jackson {@link ObjectMapper} used internally.
+     *
+     * @return
+     */
+    @Bean
+    public ObjectMapper objectMapper() {
+        return basicObjectMapper();
+    }
 
-		List<MediaType> mediaTypes = new ArrayList<MediaType>();
-		mediaTypes.addAll(Arrays.asList(MediaType.valueOf("application/schema+json"),
-				MediaType.valueOf("application/x-spring-data-verbose+json"),
-				MediaType.valueOf("application/x-spring-data-compact+json")));
+    /**
+     * The {@link HttpMessageConverter} used by Spring MVC to read and write
+     * JSON data.
+     *
+     * @return
+     */
+    @Bean
+    public MappingJackson2HttpMessageConverter jacksonHttpMessageConverter() {
 
-		// Configure this mapper to be used if HAL is not the default media type
-		if (!config().useHalAsDefaultJsonMediaType()) {
-			mediaTypes.add(MediaType.APPLICATION_JSON);
-		}
+        List<MediaType> mediaTypes = new ArrayList<MediaType>();
+        mediaTypes.addAll(Arrays.asList(MediaType.valueOf("application/schema+json"),
+                MediaType.valueOf("application/x-spring-data-verbose+json"),
+                MediaType.valueOf("application/x-spring-data-compact+json")));
 
-		MappingJackson2HttpMessageConverter jacksonConverter = new MappingJackson2HttpMessageConverter();
+        // Configure this mapper to be used if HAL is not the default media type
+        if (!config().useHalAsDefaultJsonMediaType()) {
+//            mediaTypes.add(MediaType.APPLICATION_JSON);
+        }
+
+        MappingJackson2HttpMessageConverter jacksonConverter = new MappingJackson2HttpMessageConverter();
 		jacksonConverter.setObjectMapper(objectMapper());
-		jacksonConverter.setSupportedMediaTypes(mediaTypes);
+        jacksonConverter.setSupportedMediaTypes(mediaTypes);
+        
+        return jacksonConverter;
+    }
 
-		return jacksonConverter;
-	}
+    //
+    // HAL setup
+    //
+    @Bean
+    public MappingJackson2HttpMessageConverter halJacksonHttpMessageConverter() {
 
-	//
-	// HAL setup
-	//
+        ArrayList<MediaType> mediaTypes = new ArrayList<MediaType>();
+        mediaTypes.add(MediaTypes.HAL_JSON);
 
-	@Bean
-	public MappingJackson2HttpMessageConverter halJacksonHttpMessageConverter() {
+        // Enable returning HAL if application/json is asked if it's configured to be the default type
+        if (config().useHalAsDefaultJsonMediaType()) {
+//            mediaTypes.add(MediaType.APPLICATION_JSON);
+        }
 
-		ArrayList<MediaType> mediaTypes = new ArrayList<MediaType>();
-		mediaTypes.add(MediaTypes.HAL_JSON);
+        MappingJackson2HttpMessageConverter converter = new MappingJackson2HttpMessageConverter();
+        converter.setObjectMapper(halObjectMapper());
+        converter.setSupportedMediaTypes(mediaTypes);
+        
+        return converter;
+    }
 
-		// Enable returning HAL if application/json is asked if it's configured to be the default type
-		if (config().useHalAsDefaultJsonMediaType()) {
-			mediaTypes.add(MediaType.APPLICATION_JSON);
-		}
+    @Bean
+    public ObjectMapper halObjectMapper() {
 
-		MappingJackson2HttpMessageConverter converter = new MappingJackson2HttpMessageConverter();
-		converter.setObjectMapper(halObjectMapper());
-		converter.setSupportedMediaTypes(mediaTypes);
+        HalHandlerInstantiator instantiator = new HalHandlerInstantiator(getDefaultedRelProvider(), curieProvider);
 
-		return converter;
-	}
+        ObjectMapper mapper = basicObjectMapper();
+        mapper.registerModule(new Jackson2HalModule());
+        mapper.setHandlerInstantiator(instantiator);
 
-	@Bean
-	public ObjectMapper halObjectMapper() {
+        return mapper;
+    }
 
-		HalHandlerInstantiator instantiator = new HalHandlerInstantiator(getDefaultedRelProvider(), curieProvider);
+    /**
+     * The {@link HttpMessageConverter} used to create {@literal text/uri-list}
+     * responses.
+     *
+     * @return
+     */
+    @Bean
+    public UriListHttpMessageConverter uriListHttpMessageConverter() {
+        return new UriListHttpMessageConverter();
+    }
 
-		ObjectMapper mapper = basicObjectMapper();
-		mapper.registerModule(new Jackson2HalModule());
-		mapper.setHandlerInstantiator(instantiator);
+    /**
+     * Special {@link org.springframework.web.servlet.HandlerAdapter} that only
+     * recognizes handler methods defined in the provided controller classes.
+     *
+     * @param resourceProcessors {@link ResourceProcessor}s available in the
+     * {@link ApplicationContext}.
+     * @return
+     */
+    @Bean
+    public RequestMappingHandlerAdapter repositoryExporterHandlerAdapter() {
 
-		return mapper;
-	}
+        List<HttpMessageConverter<?>> messageConverters = defaultMessageConverters();
+        configureHttpMessageConverters(messageConverters);
 
-	/**
-	 * The {@link HttpMessageConverter} used to create {@literal text/uri-list} responses.
-	 * 
-	 * @return
-	 */
-	@Bean
-	public UriListHttpMessageConverter uriListHttpMessageConverter() {
-		return new UriListHttpMessageConverter();
-	}
+        RepositoryRestHandlerAdapter handlerAdapter = new RepositoryRestHandlerAdapter(defaultMethodArgumentResolvers(),
+                resourceProcessors);
+        handlerAdapter.setMessageConverters(messageConverters);
 
-	/**
-	 * Special {@link org.springframework.web.servlet.HandlerAdapter} that only recognizes handler methods defined in the
-	 * provided controller classes.
-	 * 
-	 * @param resourceProcessors {@link ResourceProcessor}s available in the {@link ApplicationContext}.
-	 * @return
-	 */
-	@Bean
-	public RequestMappingHandlerAdapter repositoryExporterHandlerAdapter() {
+        return handlerAdapter;
+    }
 
-		List<HttpMessageConverter<?>> messageConverters = defaultMessageConverters();
-		configureHttpMessageConverters(messageConverters);
+    /**
+     * Special {@link org.springframework.web.servlet.HandlerMapping} that only
+     * recognizes handler methods defined in the provided controller classes.
+     *
+     * @return
+     */
+    @Bean
+    public RequestMappingHandlerMapping repositoryExporterHandlerMapping() {
 
-		RepositoryRestHandlerAdapter handlerAdapter = new RepositoryRestHandlerAdapter(defaultMethodArgumentResolvers(),
-				resourceProcessors);
-		handlerAdapter.setMessageConverters(messageConverters);
+        RepositoryRestHandlerMapping mapping = new RepositoryRestHandlerMapping(resourceMappings(), config());
+        mapping.setJpaHelper(jpaHelper());
 
-		return handlerAdapter;
-	}
+        return mapping;
+    }
 
-	/**
-	 * Special {@link org.springframework.web.servlet.HandlerMapping} that only recognizes handler methods defined in the
-	 * provided controller classes.
-	 * 
-	 * @return
-	 */
-	@Bean
-	public RequestMappingHandlerMapping repositoryExporterHandlerMapping() {
+    @Bean
+    public ResourceMappings resourceMappings() {
 
-		RepositoryRestHandlerMapping mapping = new RepositoryRestHandlerMapping(resourceMappings(), config());
-		mapping.setJpaHelper(jpaHelper());
+        Repositories repositories = repositories();
+        RepositoryRestConfiguration config = config();
 
-		return mapping;
-	}
+        return new RepositoryResourceMappings(config, repositories);
+    }
 
-	@Bean
-	public ResourceMappings resourceMappings() {
+    /**
+     * Jackson module responsible for intelligently serializing and
+     * deserializing JSON that corresponds to an entity.
+     *
+     * @return
+     */
+    @Bean
+    public Module persistentEntityJackson2Module() {
+        return new PersistentEntityJackson2Module(resourceMappings(), persistentEntities(), config(),
+                uriToEntityConverter());
+    }
 
-		Repositories repositories = repositories();
-		RepositoryRestConfiguration config = config();
+    /**
+     * Bean for looking up methods annotated with
+     * {@link org.springframework.web.bind.annotation.ExceptionHandler}.
+     *
+     * @return
+     */
+    @Bean
+    public ExceptionHandlerExceptionResolver exceptionHandlerExceptionResolver() {
+        ExceptionHandlerExceptionResolver er = new ExceptionHandlerExceptionResolver();
+        er.setCustomArgumentResolvers(defaultMethodArgumentResolvers());
 
-		return new RepositoryResourceMappings(config, repositories);
-	}
+        List<HttpMessageConverter<?>> messageConverters = defaultMessageConverters();
+        configureHttpMessageConverters(messageConverters);
 
-	/**
-	 * Jackson module responsible for intelligently serializing and deserializing JSON that corresponds to an entity.
-	 * 
-	 * @return
-	 */
-	@Bean
-	public Module persistentEntityJackson2Module() {
-		return new PersistentEntityJackson2Module(resourceMappings(), persistentEntities(), config(),
-				uriToEntityConverter());
-	}
+        er.setMessageConverters(messageConverters);
+        configureExceptionHandlerExceptionResolver(er);
 
-	/**
-	 * Bean for looking up methods annotated with {@link org.springframework.web.bind.annotation.ExceptionHandler}.
-	 * 
-	 * @return
-	 */
-	@Bean
-	public ExceptionHandlerExceptionResolver exceptionHandlerExceptionResolver() {
-		ExceptionHandlerExceptionResolver er = new ExceptionHandlerExceptionResolver();
-		er.setCustomArgumentResolvers(defaultMethodArgumentResolvers());
+        return er;
+    }
 
-		List<HttpMessageConverter<?>> messageConverters = defaultMessageConverters();
-		configureHttpMessageConverters(messageConverters);
+    @Bean
+    public RepositoryInvokerFactory repositoryInvokerFactory() {
+        return new DefaultRepositoryInvokerFactory(repositories(), defaultConversionService());
+    }
 
-		er.setMessageConverters(messageConverters);
-		configureExceptionHandlerExceptionResolver(er);
+    @Bean
+    public List<HttpMessageConverter<?>> defaultMessageConverters() {
 
-		return er;
-	}
+        List<HttpMessageConverter<?>> messageConverters = new ArrayList<HttpMessageConverter<?>>();
 
-	@Bean
-	public RepositoryInvokerFactory repositoryInvokerFactory() {
-		return new DefaultRepositoryInvokerFactory(repositories(), defaultConversionService());
-	}
+        if (config().getDefaultMediaType().equals(MediaTypes.HAL_JSON)) {
+            messageConverters.add(halJacksonHttpMessageConverter());
+            messageConverters.add(jacksonHttpMessageConverter());
+        } else {
+            messageConverters.add(jacksonHttpMessageConverter());
+            messageConverters.add(halJacksonHttpMessageConverter());
+        }
+        messageConverters.add(uriListHttpMessageConverter());
 
-	@Bean
-	public List<HttpMessageConverter<?>> defaultMessageConverters() {
+        return messageConverters;
+    }
 
-		List<HttpMessageConverter<?>> messageConverters = new ArrayList<HttpMessageConverter<?>>();
+    /* 
+     * (non-Javadoc)
+     * @see org.springframework.data.web.config.HateoasAwareSpringDataWebConfiguration#pageableResolver()
+     */
+    @Bean
+    @Override
+    public HateoasPageableHandlerMethodArgumentResolver pageableResolver() {
 
-		if (config().getDefaultMediaType().equals(MediaTypes.HAL_JSON)) {
-			messageConverters.add(halJacksonHttpMessageConverter());
-			messageConverters.add(jacksonHttpMessageConverter());
-		} else {
-			messageConverters.add(jacksonHttpMessageConverter());
-			messageConverters.add(halJacksonHttpMessageConverter());
-		}
-		messageConverters.add(uriListHttpMessageConverter());
+        HateoasPageableHandlerMethodArgumentResolver resolver = super.pageableResolver();
+        resolver.setPageParameterName(config().getPageParamName());
+        resolver.setSizeParameterName(config().getLimitParamName());
+        resolver.setFallbackPageable(new PageRequest(0, config().getDefaultPageSize()));
+        resolver.setMaxPageSize(config().getMaxPageSize());
 
-		return messageConverters;
-	}
+        return resolver;
+    }
 
-	/* 
-	 * (non-Javadoc)
-	 * @see org.springframework.data.web.config.HateoasAwareSpringDataWebConfiguration#pageableResolver()
-	 */
-	@Bean
-	@Override
-	public HateoasPageableHandlerMethodArgumentResolver pageableResolver() {
+    /* 
+     * (non-Javadoc)
+     * @see org.springframework.data.web.config.HateoasAwareSpringDataWebConfiguration#sortResolver()
+     */
+    @Bean
+    @Override
+    public HateoasSortHandlerMethodArgumentResolver sortResolver() {
 
-		HateoasPageableHandlerMethodArgumentResolver resolver = super.pageableResolver();
-		resolver.setPageParameterName(config().getPageParamName());
-		resolver.setSizeParameterName(config().getLimitParamName());
-		resolver.setFallbackPageable(new PageRequest(0, config().getDefaultPageSize()));
-		resolver.setMaxPageSize(config().getMaxPageSize());
+        HateoasSortHandlerMethodArgumentResolver resolver = super.sortResolver();
+        resolver.setSortParameter(config().getSortParamName());
 
-		return resolver;
-	}
+        return resolver;
+    }
 
-	/* 
-	 * (non-Javadoc)
-	 * @see org.springframework.data.web.config.HateoasAwareSpringDataWebConfiguration#sortResolver()
-	 */
-	@Bean
-	@Override
-	public HateoasSortHandlerMethodArgumentResolver sortResolver() {
+    @Bean
+    public PluginRegistry<BackendIdConverter, Class<?>> backendIdConverterRegistry() {
 
-		HateoasSortHandlerMethodArgumentResolver resolver = super.sortResolver();
-		resolver.setSortParameter(config().getSortParamName());
+        List<BackendIdConverter> converters = new ArrayList<BackendIdConverter>(idConverters.size());
+        converters.addAll(this.idConverters);
+        converters.add(DefaultIdConverter.INSTANCE);
 
-		return resolver;
-	}
+        return OrderAwarePluginRegistry.create(converters);
+    }
 
-	@Bean
-	public PluginRegistry<BackendIdConverter, Class<?>> backendIdConverterRegistry() {
+    private List<HandlerMethodArgumentResolver> defaultMethodArgumentResolvers() {
 
-		List<BackendIdConverter> converters = new ArrayList<BackendIdConverter>(idConverters.size());
-		converters.addAll(this.idConverters);
-		converters.add(DefaultIdConverter.INSTANCE);
+        PersistentEntityResourceAssemblerArgumentResolver peraResolver = new PersistentEntityResourceAssemblerArgumentResolver(
+                repositories(), entityLinks(), config().projectionConfiguration(), new ProxyProjectionFactory(beanFactory));
 
-		return OrderAwarePluginRegistry.create(converters);
-	}
+        return Arrays.asList(pageableResolver(), sortResolver(), serverHttpRequestMethodArgumentResolver(),
+                repoRequestArgumentResolver(), persistentEntityArgumentResolver(),
+                resourceMetadataHandlerMethodArgumentResolver(), HttpMethodHandlerMethodArgumentResolver.INSTANCE,
+                peraResolver, backendIdHandlerMethodArgumentResolver());
+    }
 
-	private List<HandlerMethodArgumentResolver> defaultMethodArgumentResolvers() {
+    @Autowired
+    GeoModule geoModule;
 
-		PersistentEntityResourceAssemblerArgumentResolver peraResolver = new PersistentEntityResourceAssemblerArgumentResolver(
-				repositories(), entityLinks(), config().projectionConfiguration(), new ProxyProjectionFactory(beanFactory));
+    private ObjectMapper basicObjectMapper() {
 
-		return Arrays.asList(pageableResolver(), sortResolver(), serverHttpRequestMethodArgumentResolver(),
-				repoRequestArgumentResolver(), persistentEntityArgumentResolver(),
-				resourceMetadataHandlerMethodArgumentResolver(), HttpMethodHandlerMethodArgumentResolver.INSTANCE,
-				peraResolver, backendIdHandlerMethodArgumentResolver());
-	}
+        ObjectMapper objectMapper = new ObjectMapper();
+        objectMapper.configure(SerializationFeature.INDENT_OUTPUT, true);
+        // Our special PersistentEntityResource Module
+        objectMapper.registerModule(persistentEntityJackson2Module());
+        objectMapper.registerModule(geoModule);
+        objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+        Jackson2DatatypeHelper.configureObjectMapper(objectMapper);
+        // Configure custom Modules
+        configureJacksonObjectMapper(objectMapper);
 
-	@Autowired GeoModule geoModule;
+        return objectMapper;
+    }
 
-	private ObjectMapper basicObjectMapper() {
+    private RelProvider getDefaultedRelProvider() {
+        return this.relProvider != null ? relProvider : new EvoInflectorRelProvider();
+    }
 
-		ObjectMapper objectMapper = new ObjectMapper();
-		objectMapper.configure(SerializationFeature.INDENT_OUTPUT, true);
-		// Our special PersistentEntityResource Module
-		objectMapper.registerModule(persistentEntityJackson2Module());
-		objectMapper.registerModule(geoModule);
-		objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-		Jackson2DatatypeHelper.configureObjectMapper(objectMapper);
-		// Configure custom Modules
-		configureJacksonObjectMapper(objectMapper);
+    @SuppressWarnings("unchecked")
+    private Set<Class<?>> getProjections() {
 
-		return objectMapper;
-	}
+        Set<String> packagesToScan = new HashSet<String>();
 
-	private RelProvider getDefaultedRelProvider() {
-		return this.relProvider != null ? relProvider : new EvoInflectorRelProvider();
-	}
+        for (Class<?> domainType : repositories()) {
+            packagesToScan.add(domainType.getPackage().getName());
+        }
 
-	@SuppressWarnings("unchecked")
-	private Set<Class<?>> getProjections() {
+        return new AnnotatedTypeScanner(Projection.class).findTypes(packagesToScan);
+    }
 
-		Set<String> packagesToScan = new HashSet<String>();
+    /**
+     * Override this method to add additional configuration.
+     *
+     * @param config Main configuration bean.
+     */
+    protected void configureRepositoryRestConfiguration(RepositoryRestConfiguration config) {
+    }
 
-		for (Class<?> domainType : repositories()) {
-			packagesToScan.add(domainType.getPackage().getName());
-		}
+    /**
+     * Override this method to add your own converters.
+     *
+     * @param conversionService Default ConversionService bean.
+     */
+    protected void configureConversionService(ConfigurableConversionService conversionService) {
+    }
 
-		return new AnnotatedTypeScanner(Projection.class).findTypes(packagesToScan);
-	}
+    /**
+     * Override this method to add validators manually.
+     *
+     * @param validatingListener The
+     * {@link org.springframework.context.ApplicationListener} responsible for
+     * invoking {@link org.springframework.validation.Validator} instances.
+     */
+    protected void configureValidatingRepositoryEventListener(ValidatingRepositoryEventListener validatingListener) {
+    }
 
-	/**
-	 * Override this method to add additional configuration.
-	 * 
-	 * @param config Main configuration bean.
-	 */
-	protected void configureRepositoryRestConfiguration(RepositoryRestConfiguration config) {}
+    /**
+     * Configure the {@link ExceptionHandlerExceptionResolver}.
+     *
+     * @param exceptionResolver The default exception resolver on which you can
+     * add custom argument resolvers.
+     */
+    protected void configureExceptionHandlerExceptionResolver(ExceptionHandlerExceptionResolver exceptionResolver) {
+    }
 
-	/**
-	 * Override this method to add your own converters.
-	 * 
-	 * @param conversionService Default ConversionService bean.
-	 */
-	protected void configureConversionService(ConfigurableConversionService conversionService) {}
+    /**
+     * Configure the available {@link HttpMessageConverter}s by adding your own.
+     *
+     * @param messageConverters The converters to be used by the system.
+     */
+    protected void configureHttpMessageConverters(List<HttpMessageConverter<?>> messageConverters) {
+    }
 
-	/**
-	 * Override this method to add validators manually.
-	 * 
-	 * @param validatingListener The {@link org.springframework.context.ApplicationListener} responsible for invoking
-	 *          {@link org.springframework.validation.Validator} instances.
-	 */
-	protected void configureValidatingRepositoryEventListener(ValidatingRepositoryEventListener validatingListener) {}
-
-	/**
-	 * Configure the {@link ExceptionHandlerExceptionResolver}.
-	 * 
-	 * @param exceptionResolver The default exception resolver on which you can add custom argument resolvers.
-	 */
-	protected void configureExceptionHandlerExceptionResolver(ExceptionHandlerExceptionResolver exceptionResolver) {}
-
-	/**
-	 * Configure the available {@link HttpMessageConverter}s by adding your own.
-	 * 
-	 * @param messageConverters The converters to be used by the system.
-	 */
-	protected void configureHttpMessageConverters(List<HttpMessageConverter<?>> messageConverters) {}
-
-	/**
-	 * Configure the Jackson {@link ObjectMapper} directly.
-	 * 
-	 * @param objectMapper The {@literal ObjectMapper} to be used by the system.
-	 */
-	protected void configureJacksonObjectMapper(ObjectMapper objectMapper) {}
+    /**
+     * Configure the Jackson {@link ObjectMapper} directly.
+     *
+     * @param objectMapper The {@literal ObjectMapper} to be used by the system.
+     */
+    protected void configureJacksonObjectMapper(ObjectMapper objectMapper) {
+    }
 }
